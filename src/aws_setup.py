@@ -1,17 +1,7 @@
 from contextlib import asynccontextmanager
 
 import aioboto3
-from pymongo import MongoClient, database
-
 from src.config import settings
-
-
-def get_db() -> database:
-    db_client = MongoClient(
-        f"mongodb://{settings.mongo_initdb_root_username}:{settings.mongo_initdb_root_password}@{settings.mongodb_host}:{settings.mongodb_port}"
-    )
-    db_name = settings.mongo_initdb_database
-    return db_client[db_name]
 
 
 session = aioboto3.Session()

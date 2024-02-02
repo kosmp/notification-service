@@ -1,7 +1,5 @@
 from abc import ABC, abstractmethod
 
-from src.schemas import PasswordResetMessageSchemaBase
-
 
 class AbstractRepository(ABC):
     @abstractmethod
