@@ -19,7 +19,7 @@ class PasswordResetMessageRepositoryMongo(AbstractRepository):
         self, restore_password_message: PasswordResetMessageSchemaBase
     ) -> bool:
         result = await self.db[self.collection].delete_one(
-            {"email": restore_password_message.email}
+            {"user_id": restore_password_message.user_id}
         )
 
         if result.deleted_count != 1:
