@@ -17,6 +17,8 @@ class PydanticSettings(BaseSettings):
     localstack_endpoint_url: str = None
     localstack_access_key_id: str = None
     localstack_secret_access_key: str = None
+    localstack_region_name: str = None
+    localstack_sender_email: str = None
 
     model_config = SettingsConfigDict(env_file=".env")
 
