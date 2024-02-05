@@ -1,10 +1,10 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 
 class PasswordResetMessageSchemaBase(BaseModel):
-    email: EmailStr
+    email: str
     user_id: str
     reset_link: str
     publishing_date: datetime

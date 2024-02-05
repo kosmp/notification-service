@@ -8,7 +8,7 @@ from src.logging_config import logger
 from src.mongo_setup import client, mongo_repository
 from src.schemas import PasswordResetMessageSchemaBase
 from src.config import settings
-from aws_service import SESService
+from src.aws_service import SESService
 
 
 async def process_message(message: AbstractIncomingMessage) -> None:
