@@ -9,10 +9,12 @@ class PydanticSettings(BaseSettings):
     rabbitmq_default_timeout: int = None
 
     mongodb_port: int = None
-    mongodb_host: str = None
-    mongo_initdb_root_username: str = None
-    mongo_initdb_root_password: str = None
+    mongodb_root_username: str = None
+    mongodb_primary_host: str = None
+    mongodb_root_password: str = None
     mongo_initdb_database: str = None
+    mongodb_replica_set_key: str = None
+    mongodb_replica_set_name: str = None
 
     localstack_endpoint_url: str = None
     localstack_access_key_id: str = None

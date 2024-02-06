@@ -4,50 +4,57 @@ import json
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage, ExchangeType
 from aio_pika.exceptions import AMQPConnectionError, ProbableAuthenticationError
+from pymongo.client_session import ClientSession
+
 from src.logging_config import logger
-from src.mongo_setup import client, mongo_repository
+from src.mongo_setup import mongo_repository, get_session
 from src.schemas import PasswordResetMessageSchemaBase
 from src.config import settings
 from src.aws_service import SESService
 
 
-async def process_message(message: AbstractIncomingMessage) -> None:
+async def process_message(
+    message: AbstractIncomingMessage, mongo_session: ClientSession
+) -> None:
     async with message.process(ignore_processed=True):
-        async with await client.start_session() as session, session.start_transaction():
-            retry_count = message.headers.get("x-delivery-count", 0)
-            if retry_count >= 5:
-                logger.warning(f"Max consecutive retries reached, sending to DLX.")
-                await message.nack(requeue=False)
-                return
+        mongo_session.start_transaction()
 
-            message_dict = json.loads(message.body.decode())
-            email = message.headers.get("subject")
-            user_id = message_dict["user_id"]
-            reset_link = message_dict["reset_link"]
-            publishing_datetime = message_dict["publishing_datetime"]
+        retry_count = message.headers.get("x-delivery-count", 0)
+        if retry_count >= 5:
+            logger.warning(f"Max consecutive retries reached, sending to DLX.")
+            await message.nack(requeue=False)
+            return
 
-            reset_password_message = PasswordResetMessageSchemaBase(
-                email=email,
-                user_id=user_id,
-                reset_link=reset_link,
-                publishing_datetime=publishing_datetime,
-            )
+        message_dict = json.loads(message.body.decode())
+        email = message.headers.get("subject")
+        user_id = message_dict["user_id"]
+        reset_link = message_dict["reset_link"]
+        publishing_datetime = message_dict["publishing_datetime"]
 
-            await mongo_repository.add_one(reset_password_message)
+        reset_password_message = PasswordResetMessageSchemaBase(
+            email=email,
+            user_id=user_id,
+            reset_link=reset_link,
+            publishing_datetime=publishing_datetime,
+        )
 
-            title = "Password reset token"
-            body = (
-                f"Here is you password reset url, your frontend application should use it in order"
-                f"to send request to a password restoration API endpoint: {reset_link}"
-            )
+        await mongo_repository.add_one(reset_password_message)
 
-            SESService().verify_email(settings.localstack_sender_email)
-            SESService().send_email(
-                subject=title,
-                body=body,
-                sender=settings.localstack_sender_email,
-                recipients=[email],
-            )
+        title = "Password reset token"
+        body = (
+            f"Here is you password reset url, your frontend application should use it in order"
+            f"to send request to a password restoration API endpoint: {reset_link}"
+        )
+
+        SESService().verify_email(settings.localstack_sender_email)
+        SESService().send_email(
+            subject=title,
+            body=body,
+            sender=settings.localstack_sender_email,
+            recipients=[email],
+        )
+
+        mongo_session.commit_transaction()
 
 
 async def main() -> None:
@@ -90,9 +97,10 @@ async def main() -> None:
             await queue.bind(exchange)
             await queue_dl.bind(exchange_dlx)
 
+            mongo_session = get_session()
             async with queue.iterator() as q:
                 async for message in q:
-                    await process_message(await message)
+                    await process_message(await message, mongo_session)
     except ProbableAuthenticationError as err:
         logger.error(
             f"Authentication failed. Please check your username and password. Error message: {err}"
@@ -102,6 +110,7 @@ async def main() -> None:
             f"Connection error. Check the availability of the RabbitMQ server. Error message: {err}"
         )
     except Exception as err:
+        mongo_session.abort_transaction()
         logger.error(f"General error: {err}")
 
 

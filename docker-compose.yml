@@ -1,3 +1,5 @@
+version: "3.0"
+
 services:
   notification-app-rabbitmq:
     image: rabbitmq:3.12.12-management
@@ -17,17 +19,43 @@ services:
     ports:
       - "5673:${RABBITMQ_PORT}"
       - 15674:15672
-  notification-app-mongodb:
-    container_name: notification-app-mongodb
-    image: mongo:6.0
-    volumes:
-      - .local/services/mongo:/data/db
-    ports:
-      - "27017:${MONGODB_PORT}"
+  mongodb-primary:
+    image: bitnami/mongodb:6.0.13-debian-11-r2
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
-      - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
+      - MONGODB_ADVERTISED_HOSTNAME=mongodb-primary
+      - MONGODB_REPLICA_SET_MODE=primary
+      - MONGODB_ROOT_USERNAME=${MONGODB_ROOT_USERNAME}
+      - MONGODB_ROOT_PASSWORD=${MONGODB_ROOT_PASSWORD}
+      - MONGODB_REPLICA_SET_KEY=${MONGODB_REPLICA_SET_KEY}
+      - MONGODB_REPLICA_SET_NAME=${MONGODB_REPLICA_SET_NAME}
+    ports:
+      - 27017:${MONGODB_PORT}
+    volumes:
+      - 'mongodb_master_data:/bitnami'
+  mongodb-secondary:
+    image: bitnami/mongodb:6.0.13-debian-11-r2
+    depends_on:
+      - mongodb-primary
+    environment:
+      - MONGODB_ADVERTISED_HOSTNAME=mongodb-secondary
+      - MONGODB_REPLICA_SET_MODE=secondary
+      - MONGODB_INITIAL_PRIMARY_HOST=mongodb-primary
+      - MONGODB_INITIAL_PRIMARY_PORT_NUMBER=${MONGODB_PORT}
+      - MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD=${MONGODB_ROOT_PASSWORD}
+      - MONGODB_REPLICA_SET_KEY=${MONGODB_REPLICA_SET_KEY}
+      - MONGODB_REPLICA_SET_NAME=${MONGODB_REPLICA_SET_NAME}
+  mongodb-arbiter:
+    image: bitnami/mongodb:6.0.13-debian-11-r2
+    depends_on:
+      - mongodb-primary
+    environment:
+      - MONGODB_ADVERTISED_HOSTNAME=mongodb-arbiter
+      - MONGODB_REPLICA_SET_MODE=arbiter
+      - MONGODB_INITIAL_PRIMARY_HOST=mongodb-primary
+      - MONGODB_INITIAL_PRIMARY_PORT_NUMBER=${MONGODB_PORT}
+      - MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD=${MONGODB_ROOT_PASSWORD}
+      - MONGODB_REPLICA_SET_KEY=${MONGODB_REPLICA_SET_KEY}
+      - MONGODB_REPLICA_SET_NAME=${MONGODB_REPLICA_SET_NAME}
   notification-app-localstack:
     image: localstack/localstack:3.0
     container_name: notification-app-localstack
@@ -46,7 +74,6 @@ services:
       - .local/services/localstack-data:/var/lib/localstack
       - "/var/run/docker.sock:/var/run/docker.sock"
   notification-app:
-    platform: linux/x86-64
     container_name: notification-app
     build: .
     command: python -m src.main
@@ -54,11 +81,13 @@ services:
       - .env
     volumes:
       - .:/home/appuser
-    init: True
     depends_on:
-      notification-app-mongodb:
+      mongodb-primary:
         condition: service_started
       notification-app-rabbitmq:
         condition: service_healthy
       notification-app-localstack:
         condition: service_started
+volumes:
+  mongodb_master_data:
+    driver: local
