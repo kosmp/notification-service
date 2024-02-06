@@ -66,6 +66,7 @@ async def main() -> None:
             password=settings.rabbitmq_default_pass,
             timeout=settings.rabbitmq_default_timeout,
         )
+        logger.info("Connection to rabbitmq established.")
 
         async with connection:
             channel = await connection.channel()
@@ -98,6 +99,7 @@ async def main() -> None:
             await queue_dl.bind(exchange_dlx)
 
             mongo_session = get_session()
+            logger.info("Start message consuming.")
             async with queue.iterator() as q:
                 async for message in q:
                     await process_message(await message, mongo_session)
