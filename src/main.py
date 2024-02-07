@@ -6,7 +6,7 @@ from pika.exceptions import AMQPConnectionError, ProbableAuthenticationError
 from pymongo.client_session import ClientSession
 
 from src.logging_config import logger
-from src.mongo_setup import mongo_repository, get_session
+from src.mongo_setup import mongo_repository, client
 from src.schemas import PasswordResetMessageSchemaBase
 from src.config import settings
 from src.aws_service import SESService
@@ -81,13 +81,14 @@ def main() -> None:
         channel.exchange_declare(exchange="email-dlx", exchange_type="direct")
 
         channel.queue_declare(
-            queue="reset-password-stream",
+            queue=settings.rabbitmq_email_queue_name,
             durable=True,
             arguments={
                 "x-queue-type": "quorum",
                 "x-dead-letter-exchange": "email-dlx",
             },
         )
+
         channel.queue_declare(
             queue="email-queue-dl",
             durable=True,
@@ -98,11 +99,10 @@ def main() -> None:
             },
         )
 
-        channel.queue_bind(exchange="email-x", queue="reset-password-stream")
+        channel.queue_bind(exchange="email-x", queue=settings.rabbitmq_email_queue_name)
         channel.queue_bind(exchange="email-dlx", queue="email-queue-dl")
 
-        mongo_session = get_session()
-        logger.info("Start message consuming.")
+        mongo_session = client.start_session()
 
         channel.basic_consume(
             queue="reset-password-stream",
@@ -110,7 +110,7 @@ def main() -> None:
                 ch, method, properties, body, mongo_session
             ),
         )
-
+        logger.info("Start message consuming.")
         channel.start_consuming()
     except ProbableAuthenticationError as err:
         logger.error(
@@ -123,6 +123,7 @@ def main() -> None:
     except Exception as err:
         if mongo_session:
             mongo_session.abort_transaction()
+            client.close()
         logger.error(f"General error: {err}")
 
 

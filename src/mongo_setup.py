@@ -10,8 +10,3 @@ client = MongoClient(
 db = client[settings.mongo_initdb_database]
 
 mongo_repository = PasswordResetMessageRepositoryMongo()
-
-
-def get_session():
-    with client.start_session() as session, session.start_transaction():
-        yield session
