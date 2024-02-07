@@ -11,7 +11,9 @@ from src.schemas import PasswordResetMessageSchemaBase
 from src.config import settings
 from src.aws_service import SESService
 
-mongo_repository = PasswordResetMessageRepositoryMongo(db, client)
+mongo_repository = PasswordResetMessageRepositoryMongo(
+    db, client, settings.mongodb_collection_name
+)
 
 
 def process_message(ch, method, properties, body):

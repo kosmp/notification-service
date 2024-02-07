@@ -17,6 +17,7 @@ class PydanticSettings(BaseSettings):
     mongo_initdb_database: str = None
     mongodb_replica_set_key: str = None
     mongodb_replica_set_name: str = None
+    mongodb_collection_name: str = None
 
     localstack_endpoint_url: str = None
     localstack_access_key_id: str = None

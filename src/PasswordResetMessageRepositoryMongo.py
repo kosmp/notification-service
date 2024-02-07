@@ -8,11 +8,10 @@ from src.abstract_repository import AbstractRepository
 
 
 class PasswordResetMessageRepositoryMongo(AbstractRepository):
-    collection: str = "password_reset_msg_collection"
-
-    def __init__(self, db, client):
+    def __init__(self, db, client, collection):
         self.db = db
         self.client = client
+        self.collection = collection
 
     @contextmanager
     def add_one(self, restore_pass_doc: PasswordResetMessageSchemaBase):
