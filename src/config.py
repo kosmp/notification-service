@@ -6,7 +6,7 @@ class PydanticSettings(BaseSettings):
     rabbitmq_default_pass: str = None
     rabbitmq_port: int = None
     rabbitmq_host: str = None
-    rabbitmq_default_timeout: int = None
+    rabbitmq_vhost: str = None
 
     mongodb_port: int = None
     mongodb_root_username: str = None
