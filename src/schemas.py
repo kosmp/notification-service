@@ -7,4 +7,4 @@ class PasswordResetMessageSchemaBase(BaseModel):
     email: str
     user_id: str
     reset_link: str
-    publishing_date: datetime
+    publishing_datetime: datetime

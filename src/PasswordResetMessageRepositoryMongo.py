@@ -1,27 +1,26 @@
+from contextlib import contextmanager
+
+from pymongo.errors import PyMongoError
+
+from src.logging_config import logger
 from src.schemas import PasswordResetMessageSchemaBase
 from src.abstract_repository import AbstractRepository
-from pymongo import database
 
 
 class PasswordResetMessageRepositoryMongo(AbstractRepository):
     collection: str = "password_reset_msg_collection"
 
-    def __init(self, db: database):
+    def __init__(self, db, client):
         self.db = db
+        self.client = client
 
-    async def add_one(self, restore_pass_doc: PasswordResetMessageSchemaBase):
-        result = await self.db[self.collection].insert_one(
-            restore_pass_doc.model_dump()
-        )
-        return result.inserted_id
-
-    async def delete_one(
-        self, restore_password_message: PasswordResetMessageSchemaBase
-    ) -> bool:
-        result = await self.db[self.collection].delete_one(
-            {"user_id": restore_password_message.user_id}
-        )
-
-        if result.deleted_count != 1:
-            return False
-        return True
+    @contextmanager
+    def add_one(self, restore_pass_doc: PasswordResetMessageSchemaBase):
+        try:
+            with self.client.start_session() as session:
+                with session.start_transaction():
+                    self.db[self.collection].insert_one(restore_pass_doc.model_dump())
+                    yield
+                    logger.info("Successfully saved document to database.")
+        except PyMongoError as err:
+            logger.error(f"Error while inserting to MongoDB: {err}")
