@@ -3,18 +3,18 @@ import json
 import pika
 from pika.credentials import PlainCredentials
 from pika.exceptions import AMQPConnectionError, ProbableAuthenticationError
-from pymongo.client_session import ClientSession
 
+from src.PasswordResetMessageRepositoryMongo import PasswordResetMessageRepositoryMongo
+from src.mongo_setup import db, client
 from src.logging_config import logger
-from src.mongo_setup import mongo_repository, client
 from src.schemas import PasswordResetMessageSchemaBase
 from src.config import settings
 from src.aws_service import SESService
 
+mongo_repository = PasswordResetMessageRepositoryMongo(db, client)
 
-def process_message(ch, method, properties, body, mongo_session: ClientSession):
-    mongo_session.start_transaction()
 
+def process_message(ch, method, properties, body):
     retry_count = properties.headers.get("x-delivery-count", 0)
     if retry_count >= 5:
         logger.warning(f"Max consecutive retries reached, sending to DLX.")
@@ -34,28 +34,25 @@ def process_message(ch, method, properties, body, mongo_session: ClientSession):
         publishing_datetime=publishing_datetime,
     )
 
-    mongo_repository.add_one(reset_password_message)
-
     title = "Password reset token"
     body = (
         f"Here is you password reset url, your frontend application should use it in order"
         f"to send request to a password restoration API endpoint: {reset_link}"
     )
 
-    SESService().verify_email(settings.localstack_sender_email)
-    SESService().send_email(
-        subject=title,
-        body=body,
-        sender=settings.localstack_sender_email,
-        recipients=[email],
-    )
+    with mongo_repository.add_one(reset_password_message):
+        SESService().verify_email(settings.localstack_sender_email)
+        SESService().send_email(
+            subject=title,
+            body=body,
+            sender=settings.localstack_sender_email,
+            recipients=[email],
+        )
 
-    mongo_session.commit_transaction()
-    ch.basic_ack(delivery_tag=method.delivery_tag)
+        ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
 def main() -> None:
-    mongo_session = None
     try:
         credentials = PlainCredentials(
             settings.rabbitmq_default_user, settings.rabbitmq_default_pass
@@ -86,6 +83,7 @@ def main() -> None:
             arguments={
                 "x-queue-type": "quorum",
                 "x-dead-letter-exchange": "email-dlx",
+                "x-dead-letter-routing-key": settings.rabbitmq_email_queue_name,
             },
         )
 
@@ -95,19 +93,26 @@ def main() -> None:
             arguments={
                 "x-queue-type": "quorum",
                 "x-dead-letter-exchange": "email-x",
+                "x-dead-letter-routing-key": settings.rabbitmq_email_queue_name,
                 "x-message-ttl": 10000,
             },
         )
 
-        channel.queue_bind(exchange="email-x", queue=settings.rabbitmq_email_queue_name)
-        channel.queue_bind(exchange="email-dlx", queue="email-queue-dl")
-
-        mongo_session = client.start_session()
+        channel.queue_bind(
+            exchange="email-x",
+            queue=settings.rabbitmq_email_queue_name,
+            routing_key=settings.rabbitmq_email_queue_name,
+        )
+        channel.queue_bind(
+            exchange="email-dlx",
+            queue="email-queue-dl",
+            routing_key=settings.rabbitmq_email_queue_name,
+        )
 
         channel.basic_consume(
-            queue="reset-password-stream",
+            queue=settings.rabbitmq_email_queue_name,
             on_message_callback=lambda ch, method, properties, body: process_message(
-                ch, method, properties, body, mongo_session
+                ch, method, properties, body
             ),
         )
         logger.info("Start message consuming.")
@@ -121,9 +126,6 @@ def main() -> None:
             f"Connection error. Check the availability of the RabbitMQ server. Error message: {err}"
         )
     except Exception as err:
-        if mongo_session:
-            mongo_session.abort_transaction()
-            client.close()
         logger.error(f"General error: {err}")
 
 
