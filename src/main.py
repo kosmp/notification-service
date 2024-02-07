@@ -94,7 +94,7 @@ def main() -> None:
                 "x-queue-type": "quorum",
                 "x-dead-letter-exchange": "email-x",
                 "x-dead-letter-routing-key": settings.rabbitmq_email_queue_name,
-                "x-message-ttl": 10000,
+                "x-message-ttl": settings.rabbitmq_dead_letter_message_ttl,
             },
         )
 

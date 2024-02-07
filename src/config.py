@@ -8,6 +8,7 @@ class PydanticSettings(BaseSettings):
     rabbitmq_host: str = None
     rabbitmq_vhost: str = None
     rabbitmq_email_queue_name: str = None
+    rabbitmq_dead_letter_message_ttl: str = None
 
     mongodb_port: int = None
     mongodb_root_username: str = None
