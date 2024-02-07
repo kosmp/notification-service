@@ -1,5 +1,5 @@
 import boto3
-from src.config import settings
+from src.core.config import settings
 
 from botocore.exceptions import BotoCoreError, ClientError
 

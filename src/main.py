@@ -1,6 +1,6 @@
 from pika.exceptions import AMQPConnectionError, ProbableAuthenticationError
 
-from src.consumer import connect_and_start_consuming
+from src.core.services.consumer import connect_and_start_consuming
 from src.logging_config import logger
 
 

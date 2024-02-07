@@ -3,11 +3,11 @@ import json
 import pika
 from pika.credentials import PlainCredentials
 
-from src.aws_service import SESService
-from src.config import settings
+from src.core.services.aws_service import SESService
+from src.core.config import settings
 from src.logging_config import logger
-from src.mongo_setup import mongo_repository
-from src.schemas import PasswordResetMessageSchemaBase
+from src.core.mongo_setup import mongo_repository
+from src.ports.schemas import PasswordResetMessageSchemaBase
 
 
 def process_message(ch, method, properties, body):

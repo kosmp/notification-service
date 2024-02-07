@@ -3,8 +3,8 @@ from contextlib import contextmanager
 from pymongo.errors import PyMongoError
 
 from src.logging_config import logger
-from src.schemas import PasswordResetMessageSchemaBase
-from src.abstract_repository import AbstractRepository
+from src.ports.schemas import PasswordResetMessageSchemaBase
+from src.ports.abstract_repository import AbstractRepository
 
 
 class PasswordResetMessageRepositoryMongo(AbstractRepository):
