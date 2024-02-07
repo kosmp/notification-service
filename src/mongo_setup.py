@@ -1,5 +1,6 @@
 from pymongo import MongoClient
 
+from src.PasswordResetMessageRepositoryMongo import PasswordResetMessageRepositoryMongo
 from src.config import settings
 
 client = MongoClient(
@@ -7,3 +8,7 @@ client = MongoClient(
 )
 
 db = client[settings.mongo_initdb_database]
+
+mongo_repository = PasswordResetMessageRepositoryMongo(
+    db, client, settings.mongodb_collection_name
+)
