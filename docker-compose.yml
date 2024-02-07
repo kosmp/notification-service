@@ -1,24 +1,6 @@
 version: "3.0"
 
 services:
-  notification-app-rabbitmq:
-    image: rabbitmq:3.12.12-management
-    container_name: notification-app-rabbitmq
-    hostname: rabbit
-    restart: always
-    volumes:
-      - .local/services/rabbitmq:/var/lib/rabbitmq/mnesia/
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
-    healthcheck:
-      test: rabbitmq-diagnostics check_port_connectivity
-      interval: 10s
-      timeout: 10s
-      retries: 10
-    ports:
-      - "5673:${RABBITMQ_PORT}"
-      - 15674:15672
   mongodb-primary:
     image: bitnami/mongodb:6.0.13-debian-11-r2
     environment:
@@ -84,10 +66,13 @@ services:
     depends_on:
       mongodb-primary:
         condition: service_started
-      notification-app-rabbitmq:
-        condition: service_healthy
       notification-app-localstack:
         condition: service_started
+    networks:
+      - user-management-service_app-network
 volumes:
   mongodb_master_data:
     driver: local
+networks:
+  user-management-service_app-network:
+    external: true
