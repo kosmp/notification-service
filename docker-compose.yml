@@ -1,33 +1,49 @@
+version: "3.0"
+
 services:
-  notification-app-rabbitmq:
-    image: rabbitmq:3.12.12-management
-    container_name: notification-app-rabbitmq
-    hostname: rabbit
-    restart: always
-    volumes:
-      - .local/services/rabbitmq:/var/lib/rabbitmq/mnesia/
+  mongodb-primary:
+    image: bitnami/mongodb:6.0.13-debian-11-r2
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
-    healthcheck:
-      test: rabbitmq-diagnostics check_port_connectivity
-      interval: 10s
-      timeout: 10s
-      retries: 10
+      - MONGODB_ADVERTISED_HOSTNAME=mongodb-primary
+      - MONGODB_REPLICA_SET_MODE=primary
+      - MONGODB_ROOT_USERNAME=${MONGODB_ROOT_USERNAME}
+      - MONGODB_ROOT_PASSWORD=${MONGODB_ROOT_PASSWORD}
+      - MONGODB_REPLICA_SET_KEY=${MONGODB_REPLICA_SET_KEY}
+      - MONGODB_REPLICA_SET_NAME=${MONGODB_REPLICA_SET_NAME}
     ports:
-      - "5673:${RABBITMQ_PORT}"
-      - 15674:15672
-  notification-app-mongodb:
-    container_name: notification-app-mongodb
-    image: mongo:6.0
+      - 27017:${MONGODB_PORT}
     volumes:
-      - .local/services/mongo:/data/db
-    ports:
-      - "27017:${MONGODB_PORT}"
+      - 'mongodb_master_data:/bitnami'
+    networks:
+      - notification_app-network
+  mongodb-secondary:
+    image: bitnami/mongodb:6.0.13-debian-11-r2
+    depends_on:
+      - mongodb-primary
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
-      - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
+      - MONGODB_ADVERTISED_HOSTNAME=mongodb-secondary
+      - MONGODB_REPLICA_SET_MODE=secondary
+      - MONGODB_INITIAL_PRIMARY_HOST=mongodb-primary
+      - MONGODB_INITIAL_PRIMARY_PORT_NUMBER=${MONGODB_PORT}
+      - MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD=${MONGODB_ROOT_PASSWORD}
+      - MONGODB_REPLICA_SET_KEY=${MONGODB_REPLICA_SET_KEY}
+      - MONGODB_REPLICA_SET_NAME=${MONGODB_REPLICA_SET_NAME}
+    networks:
+      - notification_app-network
+  mongodb-arbiter:
+    image: bitnami/mongodb:6.0.13-debian-11-r2
+    depends_on:
+      - mongodb-primary
+    environment:
+      - MONGODB_ADVERTISED_HOSTNAME=mongodb-arbiter
+      - MONGODB_REPLICA_SET_MODE=arbiter
+      - MONGODB_INITIAL_PRIMARY_HOST=mongodb-primary
+      - MONGODB_INITIAL_PRIMARY_PORT_NUMBER=${MONGODB_PORT}
+      - MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD=${MONGODB_ROOT_PASSWORD}
+      - MONGODB_REPLICA_SET_KEY=${MONGODB_REPLICA_SET_KEY}
+      - MONGODB_REPLICA_SET_NAME=${MONGODB_REPLICA_SET_NAME}
+    networks:
+      - notification_app-network
   notification-app-localstack:
     image: localstack/localstack:3.0
     container_name: notification-app-localstack
@@ -45,8 +61,9 @@ services:
     volumes:
       - .local/services/localstack-data:/var/lib/localstack
       - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - notification_app-network
   notification-app:
-    platform: linux/x86-64
     container_name: notification-app
     build: .
     command: python -m src.main
@@ -54,11 +71,19 @@ services:
       - .env
     volumes:
       - .:/home/appuser
-    init: True
     depends_on:
-      notification-app-mongodb:
+      mongodb-primary:
         condition: service_started
-      notification-app-rabbitmq:
-        condition: service_healthy
       notification-app-localstack:
         condition: service_started
+    networks:
+      - user-management-service_app-network
+      - notification_app-network
+volumes:
+  mongodb_master_data:
+    driver: local
+networks:
+  user-management-service_app-network:
+    external: true
+  notification_app-network:
+    driver: bridge
