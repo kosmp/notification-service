@@ -1,0 +1,89 @@
+version: "3.0"
+
+services:
+  mongodb-primary:
+    image: bitnami/mongodb:6.0.13-debian-11-r2
+    environment:
+      - MONGODB_ADVERTISED_HOSTNAME=mongodb-primary
+      - MONGODB_REPLICA_SET_MODE=primary
+      - MONGODB_ROOT_USERNAME=${MONGODB_ROOT_USERNAME}
+      - MONGODB_ROOT_PASSWORD=${MONGODB_ROOT_PASSWORD}
+      - MONGODB_REPLICA_SET_KEY=${MONGODB_REPLICA_SET_KEY}
+      - MONGODB_REPLICA_SET_NAME=${MONGODB_REPLICA_SET_NAME}
+    ports:
+      - 27017:${MONGODB_PORT}
+    volumes:
+      - 'mongodb_master_data:/bitnami'
+    networks:
+      - notification_app-network
+  mongodb-secondary:
+    image: bitnami/mongodb:6.0.13-debian-11-r2
+    depends_on:
+      - mongodb-primary
+    environment:
+      - MONGODB_ADVERTISED_HOSTNAME=mongodb-secondary
+      - MONGODB_REPLICA_SET_MODE=secondary
+      - MONGODB_INITIAL_PRIMARY_HOST=mongodb-primary
+      - MONGODB_INITIAL_PRIMARY_PORT_NUMBER=${MONGODB_PORT}
+      - MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD=${MONGODB_ROOT_PASSWORD}
+      - MONGODB_REPLICA_SET_KEY=${MONGODB_REPLICA_SET_KEY}
+      - MONGODB_REPLICA_SET_NAME=${MONGODB_REPLICA_SET_NAME}
+    networks:
+      - notification_app-network
+  mongodb-arbiter:
+    image: bitnami/mongodb:6.0.13-debian-11-r2
+    depends_on:
+      - mongodb-primary
+    environment:
+      - MONGODB_ADVERTISED_HOSTNAME=mongodb-arbiter
+      - MONGODB_REPLICA_SET_MODE=arbiter
+      - MONGODB_INITIAL_PRIMARY_HOST=mongodb-primary
+      - MONGODB_INITIAL_PRIMARY_PORT_NUMBER=${MONGODB_PORT}
+      - MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD=${MONGODB_ROOT_PASSWORD}
+      - MONGODB_REPLICA_SET_KEY=${MONGODB_REPLICA_SET_KEY}
+      - MONGODB_REPLICA_SET_NAME=${MONGODB_REPLICA_SET_NAME}
+    networks:
+      - notification_app-network
+  notification-app-localstack:
+    image: localstack/localstack:3.0
+    container_name: notification-app-localstack
+    hostname: localstack
+    ports:
+      - 4568:4566
+      - 8084:8080
+    environment:
+      - SERVICES=ses
+      - DEBUG=0
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - HOSTNAME=localstack
+    env_file:
+      - .env
+    volumes:
+      - .local/services/localstack-data:/var/lib/localstack
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - notification_app-network
+  notification-app:
+    container_name: notification-app
+    build: .
+    command: python -m src.main
+    env_file:
+      - .env
+    volumes:
+      - .:/home/appuser
+    depends_on:
+      mongodb-primary:
+        condition: service_started
+      notification-app-localstack:
+        condition: service_started
+    networks:
+      - user-management-service_app-network
+      - notification_app-network
+volumes:
+  mongodb_master_data:
+    driver: local
+networks:
+  user-management-service_app-network:
+    external: true
+  notification_app-network:
+    driver: bridge
